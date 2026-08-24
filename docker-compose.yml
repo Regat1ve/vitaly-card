@@ -1,0 +1,39 @@
+# Полный запуск одной командой: docker compose up --build
+# Поднимает PostgreSQL, накатывает схему, наполняет визитку и стартует API.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: card
+      POSTGRES_PASSWORD: card
+      POSTGRES_DB: card
+    ports:
+      - "5432:5432"
+    volumes:
+      - card_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U card -d card"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://card:card@db:5432/card?schema=public
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    # db push вместо migrate deploy: миграций в репозитории нет, схема одна.
+    # Для настоящего прода это была бы migrate deploy и папка migrations.
+    command: >
+      sh -c "npx prisma db push --skip-generate &&
+             npm run seed:prod || true;
+             node dist/main.js"
+
+volumes:
+  card_pgdata:
