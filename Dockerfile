@@ -19,8 +19,10 @@ COPY prisma ./prisma
 RUN npm ci
 
 COPY tsconfig.json nest-cli.json ./
+COPY scripts ./scripts
 COPY src ./src
 COPY public ./public
+# prebuild вшивает public/index.html в сборку, поэтому scripts нужны в образе.
 RUN npm run build
 
 # ──────────────────────────────────────────────────────────────────────────────

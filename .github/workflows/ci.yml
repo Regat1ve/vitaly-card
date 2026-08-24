@@ -19,8 +19,9 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx tsc --noEmit
+      # build первым: prebuild генерирует src/generated/page.ts, без него tsc не соберётся.
       - run: npm run build
+      - run: npx tsc --noEmit
       - run: npm test
 
   docker:
