@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Сборка и юнит-тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - run: npm test
+
+  docker:
+    name: Образ и запуск в контейнере
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Здесь проверяется не «Dockerfile написан», а «контейнер поднимается
+      # вместе с базой и отвечает на настоящий запрос».
+      - name: Поднять всё через docker compose
+        run: docker compose up --build --detach
+
+      - name: Дождаться готовности API
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/health | grep -q '"database":"up"'; then
+              echo "API готов на попытке $i"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "API не поднялся"
+          docker compose logs --no-color
+          exit 1
+
+      - name: Проверить GraphQL настоящим запросом
+        run: |
+          body=$(curl -fsS -X POST http://localhost:3000/graphql \
+            -H 'Content-Type: application/json' \
+            -d '{"query":"{ profile { fullName } projects(stack:\"TypeScript\") { name } skills { name } }"}')
+          echo "$body"
+          echo "$body" | grep -q '"fullName"' || { echo "профиль не пришёл"; exit 1; }
+          if echo "$body" | grep -q '"errors"'; then echo "GraphQL вернул ошибки"; exit 1; fi
+          echo "GraphQL отвечает"
+
+      - name: Проверить, что валидация мутации работает
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST http://localhost:3000/graphql \
+            -H 'Content-Type: application/json' \
+            -d '{"query":"mutation { contact(input:{name:\"A\", email:\"не-почта\", message:\"мало\"}) { id } }"}')
+          cat /tmp/out.json
+          grep -q '"errors"' /tmp/out.json || { echo "невалидный ввод прошёл — это баг"; exit 1; }
+          echo "невалидный ввод отклонён (HTTP $code)"
+
+      - name: Проверить статическую страницу визитки
+        run: curl -fsS http://localhost:3000/ | grep -q 'Цифровая визитка\|цифровая визитка' && echo "страница отдаётся"
+
+      - name: Логи контейнеров при падении
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Погасить
+        if: always()
+        run: docker compose down --volumes
