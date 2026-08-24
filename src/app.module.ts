@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -27,8 +28,10 @@ import { PrismaModule } from './prisma/prisma.module';
         : join(process.cwd(), 'schema.gql'),
       sortSchema: true,
       playground: false,
-      // Песочница нужна: без неё «ссылка на проект» показывает голый POST-эндпоинт.
       introspection: true,
+      // Песочница нужна: без неё GET /graphql из браузера отдаёт не схему,
+      // а ошибку защиты от CSRF, и по ссылке смотреть нечего.
+      plugins: [ApolloServerPluginLandingPageLocalDefault({ embed: true, includeCookies: false })],
       path: '/graphql',
       // req нужен ограничителю частоты: без него он не знает, кого считать.
       context: ({ req, res }: { req: unknown; res: unknown }) => ({ req, res }),
