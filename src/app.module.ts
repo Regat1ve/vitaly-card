@@ -19,7 +19,12 @@ import { PrismaModule } from './prisma/prisma.module';
     // не могут разъехаться, потому что источник один.
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'schema.gql'),
+      // На serverless файловая система только для чтения, и попытка записать
+      // schema.gql роняет приложение на старте с EROFS. Там схема держится
+      // в памяти; локально пишется в файл — так её удобно посмотреть глазами.
+      autoSchemaFile: process.env.VERCEL || process.env.READONLY_FS === '1'
+        ? true
+        : join(process.cwd(), 'schema.gql'),
       sortSchema: true,
       playground: false,
       // Песочница нужна: без неё «ссылка на проект» показывает голый POST-эндпоинт.
