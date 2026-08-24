@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
@@ -10,6 +11,16 @@ import { GqlThrottlerGuard } from './common/gql-throttler.guard';
 import { CardModule } from './card/card.module';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
+
+/**
+ * Где лежит собранная страница визитки. Локально и в контейнере это dist/public,
+ * но на serverless сборка раскладывает файлы иначе, и жёсткий путь давал 404.
+ * Поэтому кандидаты проверяются на существование, а не угадываются.
+ */
+const STATIC_ROOT =
+  [join(__dirname, 'public'), join(process.cwd(), 'public'), join(process.cwd(), 'dist', 'public')].find((candidate) =>
+    existsSync(candidate),
+  ) ?? join(__dirname, 'public');
 
 @Module({
   imports: [
@@ -54,7 +65,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 30 }]),
 
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, 'public'),
+      rootPath: STATIC_ROOT,
       exclude: ['/graphql', '/health'],
     }),
 

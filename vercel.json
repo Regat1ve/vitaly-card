@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "functions": {
     "api/index.js": {
-      "includeFiles": "dist/**",
+      "includeFiles": "{dist,public}/**",
       "maxDuration": 20
     }
   },
@@ -12,6 +12,5 @@
       "source": "/(.*)",
       "destination": "/api/index"
     }
-  ],
-  "outputDirectory": "public"
+  ]
 }
