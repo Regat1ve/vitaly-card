@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Виталий Зеленов — цифровая визитка</title>
+    <style>
+      :root {
+        --ink: #10141a;
+        --muted: #626b78;
+        --line: #e3e7ec;
+        --accent: #1f6feb;
+        --bg: #f7f8fa;
+        --card: #fff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e8ecf1;
+          --muted: #9aa4b2;
+          --line: #262c36;
+          --accent: #6aa6ff;
+          --bg: #0d1117;
+          --card: #131820;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 32px 20px 72px;
+        font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+      main { max-width: 760px; margin: 0 auto; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      h1 { font-size: 26px; margin: 0 0 4px; }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; }
+      .headline { color: var(--accent); font-weight: 600; margin: 0 0 12px; }
+      .summary { margin: 0 0 16px; }
+      .meta { color: var(--muted); font-size: 13px; }
+      .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+      .links a {
+        color: var(--accent);
+        text-decoration: none;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 14px;
+        font-size: 13px;
+      }
+      .links a:hover { border-color: var(--accent); }
+      .skill-group { margin-bottom: 14px; }
+      .skill-group h3 { font-size: 12px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .chip {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 3px 9px;
+        font-size: 13px;
+      }
+      .chip.confident { border-color: var(--accent); color: var(--accent); }
+      .chip.learning { color: var(--muted); border-style: dashed; }
+      .project { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+      .project:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+      .project h3 { margin: 0 0 2px; font-size: 17px; }
+      .project .role { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+      .project ul { margin: 10px 0 0; padding-left: 20px; }
+      .project li { margin-bottom: 4px; }
+      .stack { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+      .stack span { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; }
+      .legend { font-size: 12px; color: var(--muted); margin-top: 10px; }
+      .note { font-size: 13px; color: var(--muted); }
+      .note code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+      .error { color: #d1242f; }
+    </style>
+  </head>
+  <body>
+    <main id="root">
+      <div class="card">Загружаем визитку…</div>
+    </main>
+
+    <script type="module">
+      // Страница ничего не знает о базе: она обычный клиент того же GraphQL API,
+      // который отдаётся наружу. Один запрос — вся визитка.
+      const QUERY = `{
+        profile {
+          fullName headline summary location timezone email phone
+          links { kind label url }
+          skills { name category level years }
+          projects { slug name summary role stack highlights url repoUrl year featured }
+        }
+      }`;
+
+      const CATEGORY_TITLES = {
+        LANGUAGE: 'Языки',
+        FRONTEND: 'Фронтенд',
+        BACKEND: 'Бэкенд',
+        DATABASE: 'Базы данных',
+        INFRA: 'Инфраструктура',
+        AI: 'Работа с LLM',
+      };
+
+      const escape = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+      async function load() {
+        const response = await fetch('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: QUERY }),
+        });
+        const payload = await response.json();
+        if (payload.errors) throw new Error(payload.errors[0].message);
+        return payload.data.profile;
+      }
+
+      function renderSkills(skills) {
+        const byCategory = new Map();
+        for (const skill of skills) {
+          if (!byCategory.has(skill.category)) byCategory.set(skill.category, []);
+          byCategory.get(skill.category).push(skill);
+        }
+
+        return [...byCategory]
+          .map(
+            ([category, list]) => `
+              <div class="skill-group">
+                <h3>${escape(CATEGORY_TITLES[category] ?? category)}</h3>
+                <div class="chips">
+                  ${list
+                    .map(
+                      (skill) =>
+                        `<span class="chip ${skill.level.toLowerCase()}" title="${
+                          skill.level === 'CONFIDENT'
+                            ? 'пишу каждый день'
+                            : skill.level === 'WORKING'
+                              ? 'писал в проде'
+                              : 'пробовал в проекте'
+                        }">${escape(skill.name)}</span>`,
+                    )
+                    .join('')}
+                </div>
+              </div>`,
+          )
+          .join('');
+      }
+
+      function renderProjects(projects) {
+        return projects
+          .map(
+            (project) => `
+              <div class="project">
+                <h3>${escape(project.name)}${project.featured ? '' : ''}</h3>
+                <p class="role">${escape(project.role)} · ${project.year}</p>
+                <p>${escape(project.summary)}</p>
+                ${
+                  project.highlights.length
+                    ? `<ul>${project.highlights.map((h) => `<li>${escape(h)}</li>`).join('')}</ul>`
+                    : ''
+                }
+                <div class="stack">${project.stack.map((s) => `<span>${escape(s)}</span>`).join('')}</div>
+                <div class="links">
+                  ${project.url ? `<a href="${escape(project.url)}" target="_blank" rel="noreferrer">Открыть</a>` : ''}
+                  ${project.repoUrl ? `<a href="${escape(project.repoUrl)}" target="_blank" rel="noreferrer">Исходники</a>` : ''}
+                </div>
+              </div>`,
+          )
+          .join('');
+      }
+
+      load()
+        .then((profile) => {
+          document.getElementById('root').innerHTML = `
+            <div class="card">
+              <h1>${escape(profile.fullName)}</h1>
+              <p class="headline">${escape(profile.headline)}</p>
+              <p class="summary">${escape(profile.summary)}</p>
+              <p class="meta">${escape(profile.location)} · ${escape(profile.timezone)} · ${escape(profile.email)}${
+                profile.phone ? ' · ' + escape(profile.phone) : ''
+              }</p>
+              <div class="links">
+                ${profile.links
+                  .map((link) => `<a href="${escape(link.url)}" target="_blank" rel="noreferrer">${escape(link.label)}</a>`)
+                  .join('')}
+              </div>
+            </div>
+
+            <div class="card">
+              <h2>Навыки</h2>
+              ${renderSkills(profile.skills)}
+              <p class="legend">Сплошная рамка — писал в проде, пунктир — пробовал в проекте, синим — пишу каждый день.</p>
+            </div>
+
+            <div class="card">
+              <h2>Проекты</h2>
+              ${renderProjects(profile.projects)}
+            </div>
+
+            <div class="card note">
+              Эта страница — обычный клиент того же API. Схема и песочница: <a href="/graphql">/graphql</a>,
+              состояние сервиса и базы: <a href="/health">/health</a>.
+              Попробуйте <code>{ projects(stack: "PostgreSQL") { name year } }</code>.
+            </div>`;
+        })
+        .catch((error) => {
+          document.getElementById('root').innerHTML =
+            `<div class="card error">Не удалось загрузить визитку: ${escape(error.message)}</div>`;
+        });
+    </script>
+  </body>
+</html>
