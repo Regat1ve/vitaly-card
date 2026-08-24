@@ -1,0 +1,125 @@
+// Визитка живёт в отдельной схеме PostgreSQL: база общая с другим моим проектом,
+// а схема изолирует таблицы так, что пересечься они не могут.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  fullName  String
+  headline  String
+  summary   String
+  location  String
+  timezone  String
+  email     String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  links    Link[]
+  skills   Skill[]
+  projects Project[]
+  contacts ContactRequest[]
+
+  @@map("profiles")
+}
+
+model Link {
+  id        String   @id @default(cuid())
+  profileId String
+  kind      LinkKind
+  label     String
+  url       String
+  order     Int      @default(0)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, order])
+  @@map("links")
+}
+
+model Skill {
+  id        String        @id @default(cuid())
+  profileId String
+  name      String
+  category  SkillCategory
+  level     SkillLevel
+  // Годы практики: null там, где считать нечестно.
+  years     Float?
+  order     Int           @default(0)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, name])
+  @@index([profileId, category])
+  @@map("skills")
+}
+
+model Project {
+  id         String   @id @default(cuid())
+  profileId  String
+  slug       String   @unique
+  name       String
+  summary    String
+  role       String
+  stack      String[]
+  highlights String[]
+  url        String?
+  repoUrl    String?
+  year       Int
+  featured   Boolean  @default(false)
+  order      Int      @default(0)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, order])
+  @@map("projects")
+}
+
+/// Обращение через форму визитки. Хранится, чтобы мутация делала что-то настоящее,
+/// а не возвращала заглушку.
+model ContactRequest {
+  id        String   @id @default(cuid())
+  profileId String
+  name      String
+  email     String
+  message   String
+  source    String?
+  createdAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt])
+  @@map("contact_requests")
+}
+
+enum LinkKind {
+  GITHUB
+  PORTFOLIO
+  TELEGRAM
+  EMAIL
+  PHONE
+  OTHER
+}
+
+enum SkillCategory {
+  LANGUAGE
+  FRONTEND
+  BACKEND
+  DATABASE
+  INFRA
+  AI
+}
+
+enum SkillLevel {
+  LEARNING
+  WORKING
+  CONFIDENT
+}
